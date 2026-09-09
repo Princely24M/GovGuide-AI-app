@@ -69,9 +69,9 @@ export function useSupabaseData(userId: string | undefined) {
 
   useEffect(() => { void reload(); }, [reload]);
 
-  const addService = useCallback(async (slug: string) => {
+  const addService = useCallback(async (serviceInput: { slug: string; name: string }) => {
     if (!userId) throw friendlyDatabaseError();
-    const reference = await supabase.from("services").select("id,slug,name,description,required_documents,application_steps").eq("slug", slug).maybeSingle<ReferenceServiceRow>();
+    const reference = await supabase.from("services").select("id,slug,name,description,required_documents,application_steps").or(`slug.eq.${serviceInput.slug},name.eq.${serviceInput.name}`).limit(1).maybeSingle<ReferenceServiceRow>();
     const service = reference.data;
     if (reference.error || !service) throw new Error("This service is not available in the verified service catalogue yet.");
     const existing = await supabase.from("checklists").select("id").eq("user_id", userId).eq("service_id", service.id).maybeSingle();
@@ -80,7 +80,10 @@ export function useSupabaseData(userId: string | undefined) {
     const created = await supabase.from("checklists").insert({ user_id: userId, service_id: service.id, title: service.name, description: service.description }).select("id").single();
     if (created.error || !created.data) throw friendlyDatabaseError();
     const taskTitles = [...(service.application_steps ?? []), ...(service.required_documents ?? [])];
-    if (taskTitles.length) { const items = await supabase.from("checklist_items").insert(taskTitles.map((title, position) => ({ checklist_id: created.data.id, user_id: userId, title, description: service.name, completed: false, position }))); if (items.error) throw friendlyDatabaseError(); }
+    const effectiveTasks = taskTitles.length ? taskTitles : ["Review the official requirements before applying"];
+    const items = await supabase.from("checklist_items").insert(effectiveTasks.map((title, position) => ({ checklist_id: created.data.id, user_id: userId, title, description: service.name, completed: false, position }))).select("id,checklist_id,title,description,completed");
+    if (items.error) throw friendlyDatabaseError();
+    setChecklist(current => [...effectiveTasks.map((title, index) => ({ id: items.data?.[index]?.id ?? `${created.data.id}-${index}`, checklistId: created.data.id, title, detail: service.name, service: service.name, done: false })), ...current]);
     await supabase.from("activity").insert({ user_id: userId, activity_type: "Added service to checklist", description: `Added ${service.name} to checklist`, metadata: { service_id: service.id } });
     await reload();
     return { added: true, checklistId: created.data.id };

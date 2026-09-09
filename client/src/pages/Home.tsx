@@ -520,7 +520,7 @@ export default function Home() {
 
   const addToChecklist = async (service: Service) => {
     try {
-      const result = await data.addService(service.slug);
+      const result = await data.addService({ slug: service.slug, name: service.name });
       toast(result.added ? "Added to checklist" : "Already in your checklist", { description: result.added ? `${service.name} and its tasks are now saved.` : "Open My Checklist to continue where you left off." });
     } catch (error) {
       toast("Unable to add service", { description: error instanceof Error ? error.message : "Please try again." });
