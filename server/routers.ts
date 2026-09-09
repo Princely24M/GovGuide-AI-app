@@ -3,7 +3,7 @@ import { getGovernmentServiceLocations } from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { invokeLLM } from "./_core/llm";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
+import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 
 function readText(response: any) {
@@ -29,7 +29,7 @@ export const appRouter = router({
     locations: publicProcedure.query(async () => getGovernmentServiceLocations()),
   }),
   ai: router({
-    ask: publicProcedure
+    ask: protectedProcedure
       .input(z.object({
         messages: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().min(1).max(4000) })).min(1).max(20),
       }))
@@ -48,7 +48,7 @@ export const appRouter = router({
           return { answer: "I can help you get oriented, but the live AI service is unavailable right now. Start in Government Services, choose the service that sounds closest, and verify important requirements with the relevant official department." };
         }
       }),
-    generateContent: publicProcedure
+    generateContent: protectedProcedure
       .input(z.object({
         topic: z.string().min(1).max(500),
         contentType: z.string().min(1).max(100),
@@ -71,7 +71,7 @@ export const appRouter = router({
           return { content: `A clear starting point for ${input.topic}:\n\nConfirm the latest requirements with the relevant government department. Gather your supporting documents, follow the approved application steps, and keep your reference number. This draft is informational and should be checked against the official source before publishing.` };
         }
       }),
-    analyzeSentiment: publicProcedure
+    analyzeSentiment: protectedProcedure
       .input(z.object({ feedback: z.string().min(1).max(20000) }))
       .mutation(async ({ input }) => {
         const fallback = {

@@ -1,9 +1,9 @@
 import { MapView } from "@/components/Map";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
-import { trpc } from "@/lib/trpc";
-import { allOrganisations, govMapServices, govServiceLocations, provinces, serviceCategories, type GovMapService, type GovServiceLocation } from "@shared/govguide-map";
+import { allOrganisations, govMapServices, provinces, serviceCategories, type GovMapService, type GovServiceLocation } from "@shared/govguide-map";
 import {
   ArrowRight,
   BriefcaseBusiness,
@@ -101,30 +101,34 @@ function LocationDetails({ location, service, userCoords, onDirections, onClose 
 function DetailRow({ icon: Icon, label, value }: { icon: typeof MapPin; label: string; value: string }) { return <div className="flex gap-2"><Icon className="mt-0.5 h-4 w-4 shrink-0 text-[#087E8B]" /><div><div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{label}</div><div className="mt-1 font-semibold text-[#073B4C] dark:text-white">{value}</div></div></div>; }
 
 export default function GovernmentServicesMap() {
-  const persistedLocationsQuery = trpc.map.locations.useQuery();
-  const locationData = useMemo<GovServiceLocation[]>(() => {
-    if (!persistedLocationsQuery.data?.length) return govServiceLocations;
-    return persistedLocationsQuery.data.map(location => ({
-      id: String(location.id),
-      name: location.name,
-      organisation: location.organisation,
-      department: location.department,
-      serviceIds: location.serviceIds,
-      province: location.province,
-      city: location.city,
-      municipality: location.municipality ?? undefined,
-      address: location.address ?? undefined,
-      latitude: location.latitude ?? undefined,
-      longitude: location.longitude ?? undefined,
-      phone: location.phone ?? undefined,
-      email: location.email ?? undefined,
-      website: location.website ?? undefined,
-      openingHours: location.openingHours ?? undefined,
-      verified: location.verified,
-      lastVerified: location.lastVerified ? new Date(location.lastVerified).toLocaleDateString() : undefined,
-      dataNote: location.verified ? "Verified database record." : "Database record — not verified for production use.",
-    }));
-  }, [persistedLocationsQuery.data]);
+  const [locationData, setLocationData] = useState<GovServiceLocation[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [dataError, setDataError] = useState("");
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const [officesResult, departmentsResult, servicesResult] = await Promise.all([
+        supabase.from("offices").select("id,department_id,name,address,city,province,postal_code,latitude,longitude,phone,email,opening_hours"),
+        supabase.from("departments").select("id,name"),
+        supabase.from("services").select("id,slug,department_id"),
+      ]);
+      if (!active) return;
+      const firstError = officesResult.error || departmentsResult.error || servicesResult.error;
+      if (firstError) { setDataError("We couldn't load government office data. Please try again."); setDataLoading(false); return; }
+      const departments = new Map((departmentsResult.data ?? []).map(department => [String(department.id), department.name]));
+      const serviceIdsByDepartment = new Map<string, string[]>();
+      for (const service of servicesResult.data ?? []) {
+        const key = String(service.department_id);
+        serviceIdsByDepartment.set(key, [...(serviceIdsByDepartment.get(key) ?? []), service.slug || String(service.id)]);
+      }
+      setLocationData((officesResult.data ?? []).map(office => {
+        const department = departments.get(String(office.department_id)) ?? "Government office";
+        return { id: String(office.id), name: office.name, organisation: department, department, serviceIds: serviceIdsByDepartment.get(String(office.department_id)) ?? [], province: office.province, city: office.city, address: office.address ?? undefined, latitude: office.latitude == null ? undefined : Number(office.latitude), longitude: office.longitude == null ? undefined : Number(office.longitude), phone: office.phone ?? undefined, email: office.email ?? undefined, openingHours: office.opening_hours ? String(office.opening_hours) : undefined, verified: false, dataNote: "Supabase office record. Confirm address, opening hours and service availability with the responsible organisation." };
+      }));
+      setDataLoading(false);
+    })();
+    return () => { active = false; };
+  }, []);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<(typeof serviceCategories)[number]>("All");

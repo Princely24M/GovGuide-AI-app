@@ -9,7 +9,7 @@ const mockedInvokeLLM = vi.mocked(invokeLLM);
 
 function createCaller() {
   const ctx: TrpcContext = {
-    user: undefined,
+    user: { id: "00000000-0000-4000-8000-000000000001", openId: "00000000-0000-4000-8000-000000000001", name: "Test Citizen", email: "test@example.com", role: "user" },
     req: {} as TrpcContext["req"],
     res: {} as TrpcContext["res"],
   };
