@@ -69,21 +69,22 @@ export function useSupabaseData(userId: string | undefined) {
 
   useEffect(() => { void reload(); }, [reload]);
 
-  const addService = useCallback(async (serviceInput: { slug: string; name: string }) => {
+  const addService = useCallback(async (serviceInput: { slug: string; name: string; steps?: string[]; documents?: string[] }) => {
     if (!userId) throw friendlyDatabaseError();
-    const reference = await supabase.from("services").select("id,slug,name,description,required_documents,application_steps").or(`slug.eq.${serviceInput.slug},name.eq.${serviceInput.name}`).limit(1).maybeSingle<ReferenceServiceRow>();
-    const service = reference.data;
-    if (reference.error || !service) throw new Error("This service is not available in the verified service catalogue yet.");
+    const reference = await supabase.from("services").select("id,slug,name,description,required_documents,application_steps").limit(500);
+    const normalize = (value: string) => value.toLowerCase().replace(/[’']/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const service = ((reference.data ?? []) as ReferenceServiceRow[]).find(row => row.slug === serviceInput.slug || normalize(row.slug) === normalize(serviceInput.slug) || normalize(row.name) === normalize(serviceInput.name));
+    if (reference.error || !service) throw new Error("This service is not yet present in the authenticated Supabase service catalogue. Ask an administrator to add the verified service record before adding it to a checklist.");
     const existing = await supabase.from("checklists").select("id").eq("user_id", userId).eq("service_id", service.id).maybeSingle();
     if (existing.error) throw friendlyDatabaseError();
     if (existing.data) return { added: false, checklistId: existing.data.id };
     const created = await supabase.from("checklists").insert({ user_id: userId, service_id: service.id, title: service.name, description: service.description }).select("id").single();
     if (created.error || !created.data) throw friendlyDatabaseError();
-    const taskTitles = [...(service.application_steps ?? []), ...(service.required_documents ?? [])];
+    const taskTitles = [...(service.application_steps ?? serviceInput.steps ?? []), ...(service.required_documents ?? serviceInput.documents ?? [])];
     const effectiveTasks = taskTitles.length ? taskTitles : ["Review the official requirements before applying"];
-    const items = await supabase.from("checklist_items").insert(effectiveTasks.map((title, position) => ({ checklist_id: created.data.id, user_id: userId, title, description: service.name, completed: false, position }))).select("id,checklist_id,title,description,completed");
+    const items = await supabase.from("checklist_items").insert(effectiveTasks.map((title, position) => ({ checklist_id: created.data.id, user_id: userId, title, description: service.name, completed: false, position })));
     if (items.error) throw friendlyDatabaseError();
-    setChecklist(current => [...effectiveTasks.map((title, index) => ({ id: items.data?.[index]?.id ?? `${created.data.id}-${index}`, checklistId: created.data.id, title, detail: service.name, service: service.name, done: false })), ...current]);
+    setChecklist(current => [...effectiveTasks.map((title, index) => ({ id: `${created.data.id}-${index}`, checklistId: created.data.id, title, detail: service.name, service: serviceInput.slug, done: false })), ...current]);
     await supabase.from("activity").insert({ user_id: userId, activity_type: "Added service to checklist", description: `Added ${service.name} to checklist`, metadata: { service_id: service.id } });
     await reload();
     return { added: true, checklistId: created.data.id };
