@@ -34,6 +34,7 @@ function Router() {
     <Route path="/ask-govguide" component={ProtectedHome} />
     <Route path="/content-generator" component={ProtectedHome} />
     <Route path="/sentiment-analyzer" component={ProtectedHome} />
+    <Route path="/reports" component={ProtectedHome} />
     <Route path="/checklist" component={ProtectedHome} />
     <Route path="/saved-content" component={ProtectedHome} />
     <Route path="/nearby-offices" component={ProtectedHome} />
