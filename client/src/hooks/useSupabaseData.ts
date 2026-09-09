@@ -73,15 +73,23 @@ export function useSupabaseData(userId: string | undefined) {
     if (!userId) throw friendlyDatabaseError();
     const reference = await supabase.from("services").select("id,slug,name,description,required_documents,application_steps").limit(500);
     const normalize = (value: string) => value.toLowerCase().replace(/[’']/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-    const service = ((reference.data ?? []) as ReferenceServiceRow[]).find(row => row.slug === serviceInput.slug || normalize(row.slug) === normalize(serviceInput.slug) || normalize(row.name) === normalize(serviceInput.name));
-    if (reference.error || !service) throw new Error("This service is not yet present in the authenticated Supabase service catalogue. Ask an administrator to add the verified service record before adding it to a checklist.");
+    const aliases: Record<string, string[]> = {
+      "smart-id": ["smart-id-card"],
+      "vehicle-licence-renewal": ["motor-vehicle-licence-renewal"],
+      "business-registration": ["business-company-registration"],
+    };
+    const inputSlug = normalize(serviceInput.slug);
+    const service = ((reference.data ?? []) as ReferenceServiceRow[]).find(row => row.slug === serviceInput.slug || normalize(row.slug) === inputSlug || (aliases[inputSlug] ?? []).includes(normalize(row.slug)) || normalize(row.name) === normalize(serviceInput.name) || normalize(row.name).includes(normalize(serviceInput.name)) || normalize(serviceInput.name).includes(normalize(row.name)));
+    if (reference.error || !service) throw new Error("We couldn’t match this service to the public Supabase services table. Please refresh the Services page and try again.");
     const existing = await supabase.from("checklists").select("id").eq("user_id", userId).eq("service_id", service.id).maybeSingle();
     if (existing.error) throw friendlyDatabaseError();
     if (existing.data) return { added: false, checklistId: existing.data.id };
     const created = await supabase.from("checklists").insert({ user_id: userId, service_id: service.id, title: service.name, description: service.description }).select("id").single();
     if (created.error || !created.data) throw friendlyDatabaseError();
-    const taskTitles = [...(service.application_steps ?? serviceInput.steps ?? []), ...(service.required_documents ?? serviceInput.documents ?? [])];
-    const effectiveTasks = taskTitles.length ? taskTitles : ["Review the official requirements before applying"];
+    const templates = await supabase.from("service_checklist_templates").select("title,position").eq("service_id", service.id).order("position", { ascending: true });
+    const templateTitles = templates.error ? [] : (templates.data ?? []).map(template => template.title);
+    const taskTitles = templateTitles.length ? templateTitles : [...(service.application_steps ?? serviceInput.steps ?? []), ...(service.required_documents ?? serviceInput.documents ?? [])];
+    const effectiveTasks = taskTitles.length ? taskTitles : ["Review service requirements", "Prepare required documents", "Complete the application", "Submit the application", "Track the application"];
     const items = await supabase.from("checklist_items").insert(effectiveTasks.map((title, position) => ({ checklist_id: created.data.id, user_id: userId, title, description: service.name, completed: false, position })));
     if (items.error) throw friendlyDatabaseError();
     setChecklist(current => [...effectiveTasks.map((title, index) => ({ id: `${created.data.id}-${index}`, checklistId: created.data.id, title, detail: service.name, service: serviceInput.slug, done: false })), ...current]);
