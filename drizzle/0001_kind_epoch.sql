@@ -1,0 +1,23 @@
+CREATE TABLE `government_service_locations` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`name` varchar(255) NOT NULL,
+	`organisation` varchar(255) NOT NULL,
+	`department` varchar(255) NOT NULL,
+	`serviceCategory` varchar(100) NOT NULL,
+	`serviceIds` text NOT NULL,
+	`province` varchar(100) NOT NULL,
+	`city` varchar(120) NOT NULL,
+	`municipality` varchar(160),
+	`address` text,
+	`latitude` double,
+	`longitude` double,
+	`phone` varchar(80),
+	`email` varchar(320),
+	`website` text,
+	`openingHours` text,
+	`verified` boolean NOT NULL DEFAULT false,
+	`lastVerified` timestamp,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+	CONSTRAINT `government_service_locations_id` PRIMARY KEY(`id`)
+);

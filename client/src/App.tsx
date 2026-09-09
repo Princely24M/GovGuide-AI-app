@@ -13,6 +13,7 @@ function Router() {
       <Route path="/dashboard" component={Home} />
       <Route path="/services" component={Home} />
       <Route path="/services/:slug" component={Home} />
+      <Route path="/services-map" component={Home} />
       <Route path="/ask-govguide" component={Home} />
       <Route path="/content-generator" component={Home} />
       <Route path="/sentiment-analyzer" component={Home} />

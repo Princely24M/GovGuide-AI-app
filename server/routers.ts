@@ -1,4 +1,5 @@
 import { COOKIE_NAME } from "@shared/const";
+import { getGovernmentServiceLocations } from "./db";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { invokeLLM } from "./_core/llm";
 import { systemRouter } from "./_core/systemRouter";
@@ -23,6 +24,9 @@ export const appRouter = router({
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
+  }),
+  map: router({
+    locations: publicProcedure.query(async () => getGovernmentServiceLocations()),
   }),
   ai: router({
     ask: publicProcedure

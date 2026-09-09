@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { governmentServiceLocations, InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +89,16 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+export async function getGovernmentServiceLocations() {
+  const db = await getDb();
+  if (!db) {
+    console.warn("[Database] Cannot get government service locations: database not available");
+    return [];
+  }
+
+  const result = await db.select().from(governmentServiceLocations).orderBy(asc(governmentServiceLocations.name));
+  return result.map(location => ({
+    ...location,
+    serviceIds: location.serviceIds.split(",").map(serviceId => serviceId.trim()).filter(Boolean),
+  }));
+}
